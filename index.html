@@ -293,14 +293,14 @@
 </div>
 
 <script>
-/* ---------- storage helpers ---------- */
+/* ---------- storage helpers (browser localStorage — persists across refreshes) ---------- */
 async function sget(key){
-  try{ const r = await window.storage.get(key); return r ? JSON.parse(r.value) : null; }
-  catch(e){ return null; }
+  try{ const v = localStorage.getItem(key); return v ? JSON.parse(v) : null; }
+  catch(e){ console.error('storage read failed', e); return null; }
 }
 async function sset(key, val){
-  try{ await window.storage.set(key, JSON.stringify(val)); }
-  catch(e){ console.error('storage set failed', e); }
+  try{ localStorage.setItem(key, JSON.stringify(val)); }
+  catch(e){ console.error('storage write failed — localStorage may be full or disabled', e); }
 }
 
 function todayStr(d = new Date()){
@@ -316,17 +316,34 @@ let goals = { calories: 2000, protein: 120 };
 let dateIndex = [];
 let todayEntries = [];
 let recents = [];
+let currentDay = todayStr();
 
 /* ---------- init ---------- */
 async function init(){
   goals = (await sget('caltrack:goals')) || goals;
   dateIndex = (await sget('caltrack:dates')) || [];
   recents = (await sget('caltrack:recents')) || [];
-  todayEntries = (await sget('caltrack:entries:' + todayStr())) || [];
+  todayEntries = (await sget('caltrack:entries:' + currentDay)) || [];
   renderToday();
   await renderHistory();
 }
 init();
+
+/* ---------- daily rollover ----------
+   Checks the device's local date and, once it changes, swaps "today" over
+   to the new day's (empty) log without needing a manual page refresh. */
+async function checkDayRollover(){
+  const now = todayStr();
+  if (now !== currentDay){
+    currentDay = now;
+    todayEntries = (await sget('caltrack:entries:' + currentDay)) || [];
+    renderToday();
+    await renderHistory();
+  }
+}
+setInterval(checkDayRollover, 60 * 1000); // catch the rollover within a minute of midnight
+document.addEventListener('visibilitychange', () => { if (!document.hidden) checkDayRollover(); });
+window.addEventListener('focus', checkDayRollover);
 
 /* ---------- tabs ---------- */
 document.getElementById('tabTodayBtn').addEventListener('click', () => switchTab('today'));
@@ -388,7 +405,7 @@ function renderToday(){
       btn.addEventListener('click', async () => {
         const id = btn.getAttribute('data-id');
         todayEntries = todayEntries.filter(e => e.id !== id);
-        await sset('caltrack:entries:' + todayStr(), todayEntries);
+        await sset('caltrack:entries:' + currentDay, todayEntries);
         renderToday();
         renderHistory();
       });
@@ -414,7 +431,7 @@ async function renderHistory(){
 
   const dayData = {};
   for (const d of dates){
-    dayData[d] = d === todayStr() ? todayEntries : ((await sget('caltrack:entries:' + d)) || []);
+    dayData[d] = d === currentDay ? todayEntries : ((await sget('caltrack:entries:' + d)) || []);
   }
 
   const last7 = dates.slice(0,7);
@@ -454,10 +471,10 @@ async function logEntry(entry){
   entry.id = Date.now().toString(36) + Math.random().toString(36).slice(2,6);
   entry.time = new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
   todayEntries.push(entry);
-  await sset('caltrack:entries:' + todayStr(), todayEntries);
+  await sset('caltrack:entries:' + currentDay, todayEntries);
 
-  if (!dateIndex.includes(todayStr())){
-    dateIndex.push(todayStr());
+  if (!dateIndex.includes(currentDay)){
+    dateIndex.push(currentDay);
     await sset('caltrack:dates', dateIndex);
   }
 
