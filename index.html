@@ -1,12 +1,699 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CalTrack</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
 <style>
-body {
-    background-color: #90D5FF;
+  :root{
+    --sky:#90D5FF;
+    --sky-deep:#4FB0F0;
+    --ink:#0B3B5C;
+    --ink-soft:#5a7d92;
+    --card:#FFFFFF;
+    --line:#e3f2fc;
+    --accent:#FF8A5B;
+    --good:#2FA86A;
+    --warn:#E0562E;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background: linear-gradient(180deg, var(--sky) 0%, #BEE7FF 100%);
     font-family: Arial, sans-serif;
-    font-size: 16px;
-}
-</style>
+    color: var(--ink);
+    min-height:100vh;
+    padding-bottom:40px;
+  }
+  .app{ max-width:440px; margin:0 auto; padding:0 16px; }
+  h1{ text-align:center; padding-top:20px; margin:0; letter-spacing:1px; font-size:26px; }
+  .subtitle{ text-align:center; font-size:13px; color:#1c5a82; margin:2px 0 16px; }
 
-<h1 style="text-align: center;"> CalTrack </h1>
-<div style="text-align: center;">
-  <button style="font-size: 25px;" onclick="alert('Button was clicked!')">Scan</button>
+  .topbar{ display:flex; justify-content:flex-end; margin-top:-38px; margin-bottom:6px; }
+  .icon-btn{
+    background:rgba(255,255,255,0.6); border:none; border-radius:50%;
+    width:34px; height:34px; font-size:16px; cursor:pointer;
+  }
+
+  .tabs{ display:flex; background:rgba(255,255,255,0.5); border-radius:12px; padding:4px; margin-bottom:16px; }
+  .tab{
+    flex:1; text-align:center; padding:9px 0; border:none; background:transparent;
+    border-radius:9px; font-size:14px; font-weight:bold; color:var(--ink); cursor:pointer;
+  }
+  .tab.active{ background:var(--card); box-shadow:0 2px 6px rgba(11,59,92,0.12); }
+
+  .view{ display:none; }
+  .view.active{ display:block; }
+
+  .card{
+    background:var(--card); border-radius:16px; padding:18px;
+    box-shadow:0 8px 24px rgba(11,59,92,0.12); margin-bottom:14px;
+  }
+
+  /* Hero remaining calories */
+  .hero{ text-align:center; }
+  .hero .big{ font-size:48px; font-weight:bold; line-height:1; }
+  .hero .big.over{ color:var(--warn); }
+  .hero .big.ok{ color:var(--ink); }
+  .hero .cap{ font-size:12px; text-transform:uppercase; letter-spacing:1px; color:var(--ink-soft); margin-top:4px; }
+  .hero .bar-track{ height:10px; background:var(--line); border-radius:6px; margin-top:14px; overflow:hidden; }
+  .hero .bar-fill{ height:100%; background:var(--sky-deep); border-radius:6px; transition:width .3s; }
+  .hero .bar-fill.over{ background:var(--warn); }
+  .hero .sub{ font-size:12px; color:var(--ink-soft); margin-top:6px; }
+
+  .macro-row{ display:flex; gap:10px; margin-top:14px; }
+  .macro{ flex:1; background:#F3FAFF; border-radius:10px; padding:10px; text-align:center; }
+  .macro .val{ font-size:16px; font-weight:bold; }
+  .macro .lbl{ font-size:10px; color:var(--ink-soft); text-transform:uppercase; letter-spacing:.5px; margin-top:2px; }
+  .macro.protein .bar-track{ height:6px; background:var(--line); border-radius:4px; margin-top:6px; overflow:hidden; }
+  .macro.protein .bar-fill{ height:100%; background:var(--accent); }
+
+  .action-row{ display:flex; gap:10px; margin-bottom:14px; }
+  .action-btn{
+    flex:1; font-size:15px; font-weight:bold; padding:13px; border:none;
+    border-radius:12px; cursor:pointer; color:white;
+  }
+  .action-btn.scan{ background:var(--sky-deep); }
+  .action-btn.add{ background:var(--accent); }
+
+  #reader{ width:100%; margin-bottom:14px; border-radius:12px; overflow:hidden; display:none; }
+  #reader.active{ display:block; }
+  .status{ text-align:center; font-size:13px; color:#1c5a82; margin:-4px 0 10px; min-height:16px; }
+  .status.error{ color:var(--warn); }
+
+  .log-item{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:11px 0; border-bottom:1px solid var(--line);
+  }
+  .log-item:last-child{ border-bottom:none; }
+  .log-item .info .nm{ font-weight:bold; font-size:14px; }
+  .log-item .info .meta{ font-size:12px; color:var(--ink-soft); }
+  .log-item .nums{ text-align:right; font-size:13px; }
+  .log-item .nums .k{ font-weight:bold; }
+  .del-btn{
+    background:none; border:none; color:var(--ink-soft); font-size:18px; cursor:pointer;
+    padding:0 0 0 10px;
+  }
+  .empty{ text-align:center; color:var(--ink-soft); font-size:13px; padding:16px 0; }
+
+  /* History */
+  .hist-summary{ display:flex; gap:10px; margin-bottom:14px; }
+  .day-row{
+    background:var(--card); border-radius:14px; padding:14px 16px; margin-bottom:10px;
+    box-shadow:0 4px 12px rgba(11,59,92,0.08); cursor:pointer;
+  }
+  .day-row .top{ display:flex; justify-content:space-between; align-items:center; }
+  .day-row .date{ font-weight:bold; font-size:14px; }
+  .day-row .totals{ font-size:13px; color:var(--ink-soft); }
+  .day-row .totals .over{ color:var(--warn); font-weight:bold; }
+  .day-detail{ display:none; margin-top:10px; padding-top:10px; border-top:1px solid var(--line); }
+  .day-detail.open{ display:block; }
+  .day-detail .di{ display:flex; justify-content:space-between; font-size:12.5px; padding:4px 0; }
+
+  /* Modal */
+  .overlay{
+    display:none; position:fixed; inset:0; background:rgba(11,59,92,0.45);
+    align-items:flex-end; justify-content:center; z-index:50;
+  }
+  .overlay.active{ display:flex; }
+  .modal{
+    background:var(--card); width:100%; max-width:440px; border-radius:20px 20px 0 0;
+    padding:20px; max-height:85vh; overflow-y:auto;
+  }
+  .modal h3{ margin:0 0 12px; }
+  .modal-close{
+    float:right; background:none; border:none; font-size:20px; color:var(--ink-soft); cursor:pointer;
+  }
+  .field{ margin-bottom:12px; }
+  .field label{ display:block; font-size:12px; color:var(--ink-soft); margin-bottom:4px; }
+  .field input{
+    width:100%; padding:10px; border:1px solid var(--line); border-radius:8px; font-size:14px;
+  }
+  .row2{ display:flex; gap:10px; }
+  .row2 .field{ flex:1; }
+  .primary-btn{
+    width:100%; padding:13px; border:none; border-radius:12px; background:var(--good);
+    color:white; font-size:15px; font-weight:bold; cursor:pointer; margin-top:6px;
+  }
+  .secondary-btn{
+    width:100%; padding:12px; border:none; border-radius:12px; background:#F3FAFF;
+    color:var(--ink); font-size:14px; font-weight:bold; cursor:pointer; margin-top:8px;
+  }
+  .link-btn{
+    background:none; border:none; color:var(--sky-deep); font-size:13px; cursor:pointer;
+    text-decoration:underline; padding:0;
+  }
+  .search-result{
+    display:flex; justify-content:space-between; align-items:center;
+    padding:10px; border:1px solid var(--line); border-radius:10px; margin-bottom:8px; cursor:pointer;
+  }
+  .search-result:hover{ background:#F3FAFF; }
+  .search-result .nm{ font-size:13px; font-weight:bold; }
+  .search-result .meta{ font-size:11px; color:var(--ink-soft); }
+  .chip-row{ display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px; }
+  .chip{
+    background:#F3FAFF; border:1px solid var(--line); border-radius:20px; padding:8px 12px;
+    font-size:12.5px; cursor:pointer;
+  }
+  .section-lbl{ font-size:12px; text-transform:uppercase; letter-spacing:.5px; color:var(--ink-soft); margin:14px 0 8px; }
+  .preview-box{ background:#F3FAFF; border-radius:10px; padding:12px; margin-bottom:12px; }
+  .preview-row{ display:flex; justify-content:space-between; font-size:13px; padding:2px 0; }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <h1>CalTrack</h1>
+  <p class="subtitle">Scan, log, and track your day</p>
+  <div class="topbar">
+    <button class="icon-btn" id="settingsBtn" title="Goals">⚙️</button>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" id="tabTodayBtn">Today</button>
+    <button class="tab" id="tabHistBtn">History</button>
+  </div>
+
+  <!-- TODAY -->
+  <div class="view active" id="viewToday">
+    <div class="card hero">
+      <div class="big" id="remainingVal">–</div>
+      <div class="cap" id="remainingCap">calories remaining</div>
+      <div class="bar-track"><div class="bar-fill" id="calBarFill"></div></div>
+      <div class="sub" id="calSub"></div>
+
+      <div class="macro-row">
+        <div class="macro protein">
+          <div class="val" id="proteinVal">0g</div>
+          <div class="lbl">Protein</div>
+          <div class="bar-track"><div class="bar-fill" id="proteinBarFill"></div></div>
+        </div>
+        <div class="macro">
+          <div class="val" id="carbVal">0g</div>
+          <div class="lbl">Carbs</div>
+        </div>
+        <div class="macro">
+          <div class="val" id="fatVal">0g</div>
+          <div class="lbl">Fat</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="action-row">
+      <button class="action-btn scan" id="scanBtn">📷 Scan barcode</button>
+      <button class="action-btn add" id="addFoodBtn">+ Add food</button>
+    </div>
+
+    <div id="reader"></div>
+    <p class="status" id="scanStatus"></p>
+
+    <div class="card">
+      <div id="todayList"></div>
+    </div>
+  </div>
+
+  <!-- HISTORY -->
+  <div class="view" id="viewHistory">
+    <div class="card">
+      <div class="hist-summary">
+        <div class="macro" style="flex:1"><div class="val" id="avgCal">–</div><div class="lbl">7-day avg kcal</div></div>
+        <div class="macro" style="flex:1"><div class="val" id="avgProtein">–</div><div class="lbl">7-day avg protein</div></div>
+      </div>
+    </div>
+    <div id="historyList"></div>
+  </div>
 </div>
+
+<!-- ADD FOOD MODAL -->
+<div class="overlay" id="addOverlay">
+  <div class="modal">
+    <button class="modal-close" id="closeAddModal">×</button>
+    <h3>Add food</h3>
+
+    <div id="stepSearch">
+      <div class="field">
+        <label>Search for a food</label>
+        <input type="text" id="searchInput" placeholder="e.g. cheddar cheese">
+      </div>
+      <button class="secondary-btn" id="searchGoBtn">Search</button>
+      <div id="searchResults" style="margin-top:12px;"></div>
+
+      <div id="recentSection" style="display:none;">
+        <div class="section-lbl">Recent foods</div>
+        <div class="chip-row" id="recentChips"></div>
+      </div>
+
+      <p style="text-align:center; margin-top:14px;">
+        <button class="link-btn" id="manualEntryLink">Can't find it? Enter manually</button>
+      </p>
+    </div>
+
+    <div id="stepConfirm" style="display:none;">
+      <div id="confirmName" style="font-weight:bold; font-size:16px; margin-bottom:2px;"></div>
+      <div id="confirmBrand" style="font-size:12px; color:var(--ink-soft); margin-bottom:12px;"></div>
+
+      <div class="field">
+        <label>Amount (grams)</label>
+        <input type="number" id="gramsInput" value="100" min="1">
+      </div>
+
+      <div class="preview-box" id="confirmPreview"></div>
+
+      <button class="primary-btn" id="confirmLogBtn">Confirm &amp; log</button>
+      <button class="secondary-btn" id="backToSearchBtn">Back</button>
+    </div>
+
+    <div id="stepManual" style="display:none;">
+      <div class="field"><label>Food name</label><input type="text" id="manName"></div>
+      <div class="field"><label>Portion / serving (e.g. "1 bowl", "250g")</label><input type="text" id="manPortion"></div>
+      <div class="row2">
+        <div class="field"><label>Calories</label><input type="number" id="manCal" min="0"></div>
+        <div class="field"><label>Protein (g)</label><input type="number" id="manProtein" min="0"></div>
+      </div>
+      <div class="row2">
+        <div class="field"><label>Carbs (g)</label><input type="number" id="manCarb" min="0"></div>
+        <div class="field"><label>Fat (g)</label><input type="number" id="manFat" min="0"></div>
+      </div>
+      <button class="primary-btn" id="manualLogBtn">Confirm &amp; log</button>
+      <button class="secondary-btn" id="backToSearchBtn2">Back</button>
+    </div>
+  </div>
+</div>
+
+<!-- SETTINGS MODAL -->
+<div class="overlay" id="settingsOverlay">
+  <div class="modal">
+    <button class="modal-close" id="closeSettingsModal">×</button>
+    <h3>Daily goals</h3>
+    <div class="field"><label>Calorie goal</label><input type="number" id="goalCal" min="0"></div>
+    <div class="field"><label>Protein goal (g)</label><input type="number" id="goalProtein" min="0"></div>
+    <button class="primary-btn" id="saveGoalsBtn">Save</button>
+  </div>
+</div>
+
+<script>
+/* ---------- storage helpers ---------- */
+async function sget(key){
+  try{ const r = await window.storage.get(key); return r ? JSON.parse(r.value) : null; }
+  catch(e){ return null; }
+}
+async function sset(key, val){
+  try{ await window.storage.set(key, JSON.stringify(val)); }
+  catch(e){ console.error('storage set failed', e); }
+}
+
+function todayStr(d = new Date()){
+  const y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,'0'), day=String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${day}`;
+}
+function fmtDate(str){
+  const d = new Date(str + 'T00:00:00');
+  return d.toLocaleDateString(undefined, { weekday:'short', day:'numeric', month:'short' });
+}
+
+let goals = { calories: 2000, protein: 120 };
+let dateIndex = [];
+let todayEntries = [];
+let recents = [];
+
+/* ---------- init ---------- */
+async function init(){
+  goals = (await sget('caltrack:goals')) || goals;
+  dateIndex = (await sget('caltrack:dates')) || [];
+  recents = (await sget('caltrack:recents')) || [];
+  todayEntries = (await sget('caltrack:entries:' + todayStr())) || [];
+  renderToday();
+  await renderHistory();
+}
+init();
+
+/* ---------- tabs ---------- */
+document.getElementById('tabTodayBtn').addEventListener('click', () => switchTab('today'));
+document.getElementById('tabHistBtn').addEventListener('click', () => switchTab('history'));
+function switchTab(which){
+  document.getElementById('tabTodayBtn').classList.toggle('active', which==='today');
+  document.getElementById('tabHistBtn').classList.toggle('active', which==='history');
+  document.getElementById('viewToday').classList.toggle('active', which==='today');
+  document.getElementById('viewHistory').classList.toggle('active', which==='history');
+}
+
+/* ---------- render today ---------- */
+function totals(entries){
+  return entries.reduce((acc,e)=>{
+    acc.cal += e.calories; acc.protein += e.protein; acc.carb += e.carbs; acc.fat += e.fat;
+    return acc;
+  }, {cal:0, protein:0, carb:0, fat:0});
+}
+
+function renderToday(){
+  const t = totals(todayEntries);
+  const remaining = Math.round(goals.calories - t.cal);
+  const over = remaining < 0;
+
+  const bigEl = document.getElementById('remainingVal');
+  bigEl.textContent = Math.abs(remaining);
+  bigEl.className = 'big ' + (over ? 'over' : 'ok');
+  document.getElementById('remainingCap').textContent = over ? 'calories over budget' : 'calories remaining';
+
+  const pct = Math.min(100, (t.cal / goals.calories) * 100 || 0);
+  const barFill = document.getElementById('calBarFill');
+  barFill.style.width = pct + '%';
+  barFill.className = 'bar-fill ' + (over ? 'over' : '');
+  document.getElementById('calSub').textContent = `${Math.round(t.cal)} / ${goals.calories} kcal eaten`;
+
+  document.getElementById('proteinVal').textContent = Math.round(t.protein) + 'g';
+  document.getElementById('carbVal').textContent = Math.round(t.carb) + 'g';
+  document.getElementById('fatVal').textContent = Math.round(t.fat) + 'g';
+  document.getElementById('proteinBarFill').style.width = Math.min(100, (t.protein/goals.protein)*100 || 0) + '%';
+
+  const listEl = document.getElementById('todayList');
+  if (todayEntries.length === 0){
+    listEl.innerHTML = '<div class="empty">Nothing logged yet today</div>';
+  } else {
+    listEl.innerHTML = todayEntries.slice().reverse().map(e => `
+      <div class="log-item">
+        <div class="info">
+          <div class="nm">${escapeHtml(e.name)}</div>
+          <div class="meta">${escapeHtml(e.portionLabel)} · ${e.time}</div>
+        </div>
+        <div class="nums">
+          <div class="k">${Math.round(e.calories)} kcal</div>
+          <div>${Math.round(e.protein)}g protein</div>
+        </div>
+        <button class="del-btn" data-id="${e.id}">×</button>
+      </div>
+    `).join('');
+    listEl.querySelectorAll('.del-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const id = btn.getAttribute('data-id');
+        todayEntries = todayEntries.filter(e => e.id !== id);
+        await sset('caltrack:entries:' + todayStr(), todayEntries);
+        renderToday();
+        renderHistory();
+      });
+    });
+  }
+}
+
+function escapeHtml(s){
+  const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML;
+}
+
+/* ---------- history ---------- */
+async function renderHistory(){
+  const dates = dateIndex.slice().sort().reverse();
+  const listEl = document.getElementById('historyList');
+
+  if (dates.length === 0){
+    listEl.innerHTML = '<div class="card"><div class="empty">No history yet — log a food to get started</div></div>';
+    document.getElementById('avgCal').textContent = '–';
+    document.getElementById('avgProtein').textContent = '–';
+    return;
+  }
+
+  const dayData = {};
+  for (const d of dates){
+    dayData[d] = d === todayStr() ? todayEntries : ((await sget('caltrack:entries:' + d)) || []);
+  }
+
+  const last7 = dates.slice(0,7);
+  let sumCal=0, sumProtein=0;
+  last7.forEach(d => { const t = totals(dayData[d]); sumCal += t.cal; sumProtein += t.protein; });
+  document.getElementById('avgCal').textContent = last7.length ? Math.round(sumCal/last7.length) : '–';
+  document.getElementById('avgProtein').textContent = last7.length ? Math.round(sumProtein/last7.length) + 'g' : '–';
+
+  listEl.innerHTML = dates.map(d => {
+    const entries = dayData[d];
+    const t = totals(entries);
+    const over = t.cal > goals.calories;
+    const items = entries.map(e => `
+      <div class="di"><span>${escapeHtml(e.name)} (${escapeHtml(e.portionLabel)})</span><span>${Math.round(e.calories)} kcal</span></div>
+    `).join('') || '<div class="di"><span>No items logged</span></div>';
+
+    return `
+      <div class="day-row" data-date="${d}">
+        <div class="top">
+          <div class="date">${fmtDate(d)}</div>
+          <div class="totals"><span class="${over?'over':''}">${Math.round(t.cal)} kcal</span> · ${Math.round(t.protein)}g protein</div>
+        </div>
+        <div class="day-detail" id="detail-${d}">${items}</div>
+      </div>
+    `;
+  }).join('');
+
+  listEl.querySelectorAll('.day-row').forEach(row => {
+    row.addEventListener('click', () => {
+      document.getElementById('detail-' + row.getAttribute('data-date')).classList.toggle('open');
+    });
+  });
+}
+
+/* ---------- add entry ---------- */
+async function logEntry(entry){
+  entry.id = Date.now().toString(36) + Math.random().toString(36).slice(2,6);
+  entry.time = new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+  todayEntries.push(entry);
+  await sset('caltrack:entries:' + todayStr(), todayEntries);
+
+  if (!dateIndex.includes(todayStr())){
+    dateIndex.push(todayStr());
+    await sset('caltrack:dates', dateIndex);
+  }
+
+  // update recents (dedupe by name+brand, keep newest 8)
+  recents = recents.filter(r => r.name !== entry.name || r.brand !== entry.brand);
+  recents.unshift({
+    name: entry.name, brand: entry.brand, per100: entry.per100 || null,
+    lastGrams: entry.grams || null, flat: entry.per100 ? null : {
+      calories: entry.calories, protein: entry.protein, carbs: entry.carbs, fat: entry.fat, portionLabel: entry.portionLabel
+    }
+  });
+  recents = recents.slice(0, 8);
+  await sset('caltrack:recents', recents);
+
+  renderToday();
+  renderHistory();
+}
+
+/* ---------- barcode scanning ---------- */
+let html5QrCode = null;
+let scanning = false;
+const scanBtn = document.getElementById('scanBtn');
+const readerDiv = document.getElementById('reader');
+const scanStatus = document.getElementById('scanStatus');
+
+scanBtn.addEventListener('click', () => scanning ? stopScan() : startScan());
+
+function startScan(){
+  scanStatus.textContent = ''; scanStatus.classList.remove('error');
+  readerDiv.classList.add('active');
+  scanBtn.textContent = '⏹ Stop scanning';
+  scanning = true;
+  html5QrCode = new Html5Qrcode("reader");
+  const config = {
+    fps: 10, qrbox: { width: 250, height: 150 },
+    formatsToSupport: [
+      Html5QrcodeSupportedFormats.EAN_13, Html5QrcodeSupportedFormats.EAN_8,
+      Html5QrcodeSupportedFormats.UPC_A, Html5QrcodeSupportedFormats.UPC_E
+    ]
+  };
+  html5QrCode.start({ facingMode: "environment" }, config, onScanSuccess, () => {})
+    .catch(err => { scanStatus.textContent = "Couldn't access camera: " + err; scanStatus.classList.add('error'); resetScanBtn(); });
+}
+function stopScan(){
+  if (html5QrCode){
+    html5QrCode.stop().then(() => { html5QrCode.clear(); readerDiv.classList.remove('active'); resetScanBtn(); }).catch(() => resetScanBtn());
+  } else resetScanBtn();
+}
+function resetScanBtn(){ scanning = false; scanBtn.textContent = '📷 Scan barcode'; }
+
+function onScanSuccess(decodedText){
+  scanStatus.textContent = 'Found ' + decodedText + ' — looking it up...';
+  stopScan();
+  fetchByBarcode(decodedText);
+}
+
+async function fetchByBarcode(barcode){
+  try{
+    const res = await fetch(`https://world.openfoodfacts.org/api/v2/product/${barcode}.json`);
+    const data = await res.json();
+    if (data.status !== 1){
+      scanStatus.textContent = 'No product found for that barcode — try search or manual entry.';
+      scanStatus.classList.add('error');
+      openAddModal(); showManual();
+      return;
+    }
+    scanStatus.textContent = '';
+    openAddModal();
+    showConfirmFromOff(data.product);
+  } catch(err){
+    scanStatus.textContent = 'Lookup failed: ' + err;
+    scanStatus.classList.add('error');
+  }
+}
+
+/* ---------- add food modal flow ---------- */
+const addOverlay = document.getElementById('addOverlay');
+const stepSearch = document.getElementById('stepSearch');
+const stepConfirm = document.getElementById('stepConfirm');
+const stepManual = document.getElementById('stepManual');
+
+document.getElementById('addFoodBtn').addEventListener('click', () => { openAddModal(); showSearch(); });
+document.getElementById('closeAddModal').addEventListener('click', () => addOverlay.classList.remove('active'));
+document.getElementById('manualEntryLink').addEventListener('click', showManual);
+document.getElementById('backToSearchBtn').addEventListener('click', showSearch);
+document.getElementById('backToSearchBtn2').addEventListener('click', showSearch);
+
+function openAddModal(){
+  addOverlay.classList.add('active');
+}
+function showSearch(){
+  stepSearch.style.display='block'; stepConfirm.style.display='none'; stepManual.style.display='none';
+  document.getElementById('searchResults').innerHTML = '';
+  renderRecents();
+}
+function showManual(){
+  stepSearch.style.display='none'; stepConfirm.style.display='none'; stepManual.style.display='block';
+  ['manName','manPortion','manCal','manProtein','manCarb','manFat'].forEach(id => document.getElementById(id).value='');
+}
+
+function renderRecents(){
+  const sec = document.getElementById('recentSection');
+  const wrap = document.getElementById('recentChips');
+  if (!recents.length){ sec.style.display='none'; return; }
+  sec.style.display='block';
+  wrap.innerHTML = recents.map((r,i) => `<button class="chip" data-i="${i}">${escapeHtml(r.name)}</button>`).join('');
+  wrap.querySelectorAll('.chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      const r = recents[parseInt(chip.getAttribute('data-i'))];
+      if (r.per100){
+        showConfirmFromOff({ product_name: r.name, brands: r.brand, nutriments: {
+          'energy-kcal_100g': r.per100.cal, 'proteins_100g': r.per100.protein,
+          'carbohydrates_100g': r.per100.carb, 'fat_100g': r.per100.fat
+        }}, r.lastGrams || 100);
+      } else {
+        logEntry({
+          name: r.name, brand: r.brand, portionLabel: r.flat.portionLabel,
+          calories: r.flat.calories, protein: r.flat.protein, carbs: r.flat.carbs, fat: r.flat.fat
+        });
+        addOverlay.classList.remove('active');
+      }
+    });
+  });
+}
+
+document.getElementById('searchGoBtn').addEventListener('click', doSearch);
+document.getElementById('searchInput').addEventListener('keydown', e => { if (e.key==='Enter') doSearch(); });
+
+async function doSearch(){
+  const q = document.getElementById('searchInput').value.trim();
+  const resultsEl = document.getElementById('searchResults');
+  if (!q){ return; }
+  resultsEl.innerHTML = '<div class="empty">Searching...</div>';
+  try{
+    const url = `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(q)}&search_simple=1&action=process&json=1&page_size=6`;
+    const res = await fetch(url);
+    const data = await res.json();
+    const products = (data.products || []).filter(p => p.product_name);
+    if (!products.length){
+      resultsEl.innerHTML = '<div class="empty">No matches — try manual entry below</div>';
+      return;
+    }
+    resultsEl.innerHTML = products.map((p,i) => `
+      <div class="search-result" data-i="${i}">
+        <div><div class="nm">${escapeHtml(p.product_name)}</div><div class="meta">${escapeHtml(p.brands||'')}</div></div>
+        <div class="meta">${Math.round(p.nutriments?.['energy-kcal_100g'] ?? 0)} kcal/100g</div>
+      </div>
+    `).join('');
+    resultsEl.querySelectorAll('.search-result').forEach(el => {
+      el.addEventListener('click', () => showConfirmFromOff(products[parseInt(el.getAttribute('data-i'))]));
+    });
+  } catch(err){
+    resultsEl.innerHTML = '<div class="empty">Search failed — try manual entry below</div>';
+  }
+}
+
+let pendingOff = null;
+function showConfirmFromOff(product, defaultGrams){
+  const n = product.nutriments || {};
+  pendingOff = {
+    name: product.product_name || 'Unnamed product',
+    brand: product.brands || '',
+    per100: {
+      cal: n['energy-kcal_100g'] ?? 0,
+      protein: n['proteins_100g'] ?? 0,
+      carb: n['carbohydrates_100g'] ?? 0,
+      fat: n['fat_100g'] ?? 0
+    }
+  };
+  document.getElementById('confirmName').textContent = pendingOff.name;
+  document.getElementById('confirmBrand').textContent = pendingOff.brand;
+  document.getElementById('gramsInput').value = defaultGrams || 100;
+  updatePreview();
+  stepSearch.style.display='none'; stepConfirm.style.display='block'; stepManual.style.display='none';
+}
+
+document.getElementById('gramsInput').addEventListener('input', updatePreview);
+function updatePreview(){
+  if (!pendingOff) return;
+  const grams = parseFloat(document.getElementById('gramsInput').value) || 0;
+  const f = grams / 100;
+  const cal = pendingOff.per100.cal * f, pro = pendingOff.per100.protein * f, carb = pendingOff.per100.carb * f, fat = pendingOff.per100.fat * f;
+  document.getElementById('confirmPreview').innerHTML = `
+    <div class="preview-row"><span>Calories</span><span><b>${Math.round(cal)}</b> kcal</span></div>
+    <div class="preview-row"><span>Protein</span><span>${Math.round(pro)}g</span></div>
+    <div class="preview-row"><span>Carbs</span><span>${Math.round(carb)}g</span></div>
+    <div class="preview-row"><span>Fat</span><span>${Math.round(fat)}g</span></div>
+  `;
+}
+
+document.getElementById('confirmLogBtn').addEventListener('click', () => {
+  if (!pendingOff) return;
+  const grams = parseFloat(document.getElementById('gramsInput').value) || 0;
+  const f = grams / 100;
+  logEntry({
+    name: pendingOff.name, brand: pendingOff.brand, portionLabel: `${grams}g`,
+    calories: pendingOff.per100.cal * f, protein: pendingOff.per100.protein * f,
+    carbs: pendingOff.per100.carb * f, fat: pendingOff.per100.fat * f,
+    per100: pendingOff.per100, grams: grams
+  });
+  addOverlay.classList.remove('active');
+});
+
+document.getElementById('manualLogBtn').addEventListener('click', () => {
+  const name = document.getElementById('manName').value.trim();
+  if (!name){ alert('Give the food a name first.'); return; }
+  const portion = document.getElementById('manPortion').value.trim() || '1 serving';
+  logEntry({
+    name, brand: '', portionLabel: portion,
+    calories: parseFloat(document.getElementById('manCal').value) || 0,
+    protein: parseFloat(document.getElementById('manProtein').value) || 0,
+    carbs: parseFloat(document.getElementById('manCarb').value) || 0,
+    fat: parseFloat(document.getElementById('manFat').value) || 0
+  });
+  addOverlay.classList.remove('active');
+});
+
+/* ---------- settings ---------- */
+const settingsOverlay = document.getElementById('settingsOverlay');
+document.getElementById('settingsBtn').addEventListener('click', () => {
+  document.getElementById('goalCal').value = goals.calories;
+  document.getElementById('goalProtein').value = goals.protein;
+  settingsOverlay.classList.add('active');
+});
+document.getElementById('closeSettingsModal').addEventListener('click', () => settingsOverlay.classList.remove('active'));
+document.getElementById('saveGoalsBtn').addEventListener('click', async () => {
+  goals = {
+    calories: parseFloat(document.getElementById('goalCal').value) || 2000,
+    protein: parseFloat(document.getElementById('goalProtein').value) || 120
+  };
+  await sset('caltrack:goals', goals);
+  settingsOverlay.classList.remove('active');
+  renderToday();
+  renderHistory();
+});
+</script>
+
+</body>
+</html>
